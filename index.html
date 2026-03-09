@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tiruppur Textile Export Analytics Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold: #C9A84C;
+    --gold-light: #E8C96A;
+    --gold-dim: #8a6e2f;
+    --bg: #0B0C0E;
+    --bg2: #111315;
+    --bg3: #181A1C;
+    --bg4: #1E2124;
+    --border: #2A2D32;
+    --border2: #353940;
+    --text: #E8E4DC;
+    --text2: #A8A49C;
+    --text3: #6B6760;
+    --green: #4CAF7D;
+    --red: #E05A5A;
+    --blue: #5B9BD5;
+    --teal: #4ECDC4;
+    --orange: #F4A261;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* GRAIN OVERLAY */
+  body::before {
+    content:'';
+    position:fixed; inset:0; pointer-events:none; z-index:999;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    opacity:0.4;
+  }
+
+  /* HEADER */
+  .header {
+    background: linear-gradient(180deg, #0d0e10 0%, var(--bg) 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top:0; z-index:100;
+  }
+  .header-left { display:flex; align-items:center; gap:16px; }
+  .header-icon {
+    width:42px; height:42px;
+    background: linear-gradient(135deg, var(--gold-dim), var(--gold));
+    border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px;
+  }
+  .header-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-weight:700;
+    color: var(--text);
+    letter-spacing:0.01em;
+  }
+  .header-sub {
+    font-size:10px;
+    color: var(--text3);
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    margin-top:3px;
+  }
+  .header-right {
+    display:flex; align-items:center; gap:12px;
+  }
+  .live-badge {
+    display:flex; align-items:center; gap:6px;
+    padding: 5px 12px;
+    background: #0f2a1a;
+    border: 1px solid #1d5a32;
+    border-radius:20px;
+    font-size:10px;
+    color: var(--green);
+    letter-spacing:0.12em;
+  }
+  .live-dot {
+    width:6px; height:6px; border-radius:50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .last-updated { font-size:10px; color:var(--text3); }
+
+  /* FILTER BAR */
+  .filter-bar {
+    display:flex; align-items:center; gap:10px;
+    padding: 12px 32px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    flex-wrap:wrap;
+  }
+  .filter-label { font-size:10px; color:#888; letter-spacing:0.15em; text-transform:uppercase; margin-right:4px; font-weight:500; }
+  .filter-btn {
+    padding: 6px 16px;
+    border-radius:6px;
+    border: 1px solid #3a3d44;
+    background: #1a1c1f;
+    color: #bbb;
+    font-family:'DM Mono', monospace;
+    font-size:11px;
+    cursor:pointer;
+    transition: all 0.18s;
+    letter-spacing:0.05em;
+    font-weight:500;
+  }
+  .filter-btn:hover { border-color: var(--gold); color: var(--gold); background:#221e14; }
+  .filter-btn.active {
+    background: #3a2e10;
+    border-color: var(--gold);
+    color: #f0d060;
+    box-shadow: 0 0 0 1px var(--gold-dim);
+    font-weight:700;
+  }
+  .filter-sep { width:1px; height:28px; background:#333; margin:0 6px; }
+  .filter-select {
+    padding:6px 14px;
+    background:#1a1c1f;
+    border:1px solid #3a3d44;
+    color:#ccc;
+    font-family:'DM Mono', monospace;
+    font-size:11px;
+    border-radius:6px;
+    cursor:pointer;
+    outline:none;
+  }
+  .filter-select option { background:#1a1c1f; color:#ccc; }
+  .filter-select:focus { border-color:var(--gold); }
+
+  /* MAIN GRID */
+  .main { padding: 24px 32px; display:flex; flex-direction:column; gap:20px; }
+
+  /* KPI ROW */
+  .kpi-row { display:grid; grid-template-columns: repeat(5,1fr); gap:14px; }
+  .kpi-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius:12px;
+    padding:16px 18px;
+    position:relative;
+    overflow:hidden;
+    transition: border-color 0.2s, transform 0.2s;
+    cursor:default;
+  }
+  .kpi-card::before {
+    content:'';
+    position:absolute; top:0; left:0; right:0; height:2px;
+    background: linear-gradient(90deg, transparent, var(--accent-color), transparent);
+  }
+  .kpi-card:hover { border-color: var(--border2); transform:translateY(-2px); }
+  .kpi-label { font-size:9px; color:var(--text3); letter-spacing:0.2em; text-transform:uppercase; margin-bottom:8px; }
+  .kpi-value {
+    font-family:'Playfair Display', serif;
+    font-size:26px;
+    font-weight:700;
+    color:var(--text);
+    line-height:1;
+  }
+  .kpi-sub { margin-top:6px; display:flex; align-items:center; gap:6px; }
+  .kpi-change {
+    font-size:11px;
+    padding:2px 8px;
+    border-radius:10px;
+  }
+  .kpi-change.up { background:#0d2e1a; color:var(--green); }
+  .kpi-change.down { background:#2e0d0d; color:var(--red); }
+  .kpi-period { font-size:10px; color:var(--text3); }
+  .kpi-sparkline { margin-top:10px; height:32px; }
+
+  /* CHART ROWS */
+  .charts-row { display:grid; gap:16px; }
+  .charts-row-2 { grid-template-columns: 2fr 1fr; }
+  .charts-row-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .charts-row-2b { grid-template-columns: 1fr 1fr; }
+
+  .chart-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    position:relative;
+    overflow:hidden;
+  }
+  .chart-header {
+    display:flex; justify-content:space-between; align-items:flex-start;
+    margin-bottom:16px;
+  }
+  .chart-title {
+    font-family:'Playfair Display', serif;
+    font-size:15px; font-weight:600; color:var(--text);
+    line-height:1.3;
+  }
+  .chart-subtitle { font-size:10px; color:var(--text3); margin-top:3px; letter-spacing:0.08em; }
+  .chart-badge {
+    padding:3px 10px;
+    border-radius:12px;
+    font-size:10px;
+    font-family:'DM Mono', monospace;
+    letter-spacing:0.08em;
+    background:var(--bg4);
+    border:1px solid var(--border2);
+    color:var(--text3);
+    white-space:nowrap;
+  }
+  .canvas-wrap { position:relative; }
+
+  /* DESTINATION TABLE */
+  .dest-table { width:100%; border-collapse:collapse; }
+  .dest-table th {
+    font-size:10px; letter-spacing:0.18em; text-transform:uppercase;
+    color:#aaa; padding:10px 10px 10px 8px; text-align:left;
+    border-bottom:2px solid #333; background:#161819;
+  }
+  .dest-table td { padding:11px 8px; font-size:13px; border-bottom:1px solid #1e2022; vertical-align:middle; }
+  .dest-table tr:last-child td { border-bottom:none; }
+  .dest-table tbody tr:hover td { background:#1a1d20; }
+  .dest-rank { color:#888; font-size:12px; font-weight:600; width:32px; }
+  .dest-name { color:#e8e4dc; font-family:'Lora',serif; font-size:13px; font-weight:400; }
+  .dest-flag { font-size:18px; margin-right:6px; }
+  .dest-bar-wrap { width:100%; background:#252830; border-radius:4px; height:4px; margin-top:5px; }
+  .dest-bar { height:4px; border-radius:4px; background: linear-gradient(90deg, #8a6e2f, #C9A84C); }
+  .dest-val { color:#E8C96A; font-weight:600; text-align:right; font-size:13px; white-space:nowrap; }
+  .dest-growth { text-align:right; font-size:12px; font-weight:600; white-space:nowrap; }
+  .dest-share { color:#aaa; text-align:right; font-size:12px; white-space:nowrap; }
+
+  /* EVENT MARKERS */
+  .events-section { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
+  .event-chip {
+    padding:4px 12px;
+    border-radius:20px;
+    font-size:10px;
+    letter-spacing:0.08em;
+    cursor:pointer;
+    transition:all 0.2s;
+    border:1px solid;
+  }
+  .event-chip.gst { background:#1a120040; border-color:#8a6e2f; color:var(--gold); }
+  .event-chip.covid { background:#2a000040; border-color:#8a2020; color:#e07070; }
+  .event-chip.china1 { background:#001a1540; border-color:#2a6a5a; color:var(--teal); }
+  .event-chip.rec { background:#001a3040; border-color:#2a4a8a; color:var(--blue); }
+  .event-chip:hover { transform:scale(1.05); }
+
+  /* INSIGHT CARDS */
+  .insights-row { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .insight-card {
+    background:var(--bg2);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:16px;
+    border-left:3px solid var(--ins-color);
+  }
+  .insight-icon { font-size:22px; margin-bottom:8px; }
+  .insight-title { font-size:12px; color:var(--text); font-family:'Lora',serif; margin-bottom:6px; line-height:1.4; }
+  .insight-body { font-size:11px; color:var(--text3); line-height:1.7; }
+  .insight-metric { font-size:16px; font-family:'Playfair Display',serif; color:var(--ins-color); margin-top:8px; }
+
+  /* HEATMAP */
+  .heatmap-grid {
+    display:grid;
+    grid-template-columns: 60px repeat(12, 1fr);
+    gap:3px;
+    font-size:9px;
+  }
+  .hm-header { color:var(--text3); text-align:center; padding:4px 2px; letter-spacing:0.1em; }
+  .hm-row-label { color:var(--text3); display:flex; align-items:center; font-size:10px; }
+  .hm-cell {
+    height:28px; border-radius:4px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:9px; cursor:pointer;
+    transition:transform 0.15s;
+    position:relative;
+  }
+  .hm-cell:hover { transform:scale(1.15); z-index:10; }
+  .hm-tooltip {
+    display:none;
+    position:absolute; bottom:110%; left:50%; transform:translateX(-50%);
+    background:var(--bg4);
+    border:1px solid var(--border2);
+    border-radius:6px; padding:6px 10px;
+    font-size:10px; color:var(--text2);
+    white-space:nowrap; z-index:50;
+    pointer-events:none;
+  }
+  .hm-cell:hover .hm-tooltip { display:block; }
+
+  /* BOTTOM SECTION */
+  .portfolio-section {
+    background:var(--bg2);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:24px;
+    position:relative;
+    overflow:hidden;
+  }
+  .portfolio-section::before {
+    content:'';
+    position:absolute; top:0; left:0; right:0; height:1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+  .portfolio-title {
+    font-family:'Playfair Display',serif;
+    font-size:18px; font-weight:700;
+    color:var(--text); margin-bottom:4px;
+  }
+  .portfolio-sub { font-size:11px; color:var(--text3); margin-bottom:20px; }
+  .portfolio-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  .portfolio-step {
+    background:var(--bg3);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px;
+    transition:border-color 0.2s;
+  }
+  .portfolio-step:hover { border-color:var(--gold-dim); }
+  .step-num {
+    width:28px; height:28px; border-radius:50%;
+    background:linear-gradient(135deg, var(--gold-dim), var(--gold));
+    color:#000; font-size:12px; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+    margin-bottom:10px;
+  }
+  .step-title { font-size:12px; color:var(--text); margin-bottom:6px; font-family:'Lora',serif; }
+  .step-tools { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px; }
+  .step-tool {
+    font-size:9px; padding:2px 7px; border-radius:10px;
+    background:var(--bg4); border:1px solid var(--border2); color:var(--text3);
+    letter-spacing:0.08em;
+  }
+  .step-items { list-style:none; }
+  .step-items li {
+    font-size:10px; color:var(--text3); padding:2px 0;
+    padding-left:12px; position:relative; line-height:1.5;
+  }
+  .step-items li::before { content:'→'; position:absolute; left:0; color:var(--gold-dim); }
+
+  /* TOOLTIP global */
+  #tooltip {
+    position:fixed; pointer-events:none; z-index:999;
+    background:var(--bg4); border:1px solid var(--border2);
+    border-radius:8px; padding:10px 14px;
+    font-size:11px; color:var(--text2);
+    box-shadow:0 8px 32px rgba(0,0,0,0.6);
+    display:none; max-width:200px; line-height:1.6;
+  }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width:6px; height:6px; }
+  ::-webkit-scrollbar-track { background:var(--bg2); }
+  ::-webkit-scrollbar-thumb { background:var(--border2); border-radius:4px; }
+
+  /* ANIMATIONS */
+  @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+  .kpi-card { animation: fadeUp 0.5s ease both; }
+  .kpi-card:nth-child(1){animation-delay:0.05s}
+  .kpi-card:nth-child(2){animation-delay:0.1s}
+  .kpi-card:nth-child(3){animation-delay:0.15s}
+  .kpi-card:nth-child(4){animation-delay:0.2s}
+  .kpi-card:nth-child(5){animation-delay:0.25s}
+  .chart-card { animation: fadeUp 0.5s ease both; animation-delay:0.3s; }
+
+  /* =============================================
+     MOBILE RESPONSIVE — Tablet (≤768px) & Phone (≤480px)
+  ============================================= */
+
+  /* --- TABLET (768px and below) --- */
+  @media (max-width: 768px) {
+    /* Header */
+    .header {
+      padding: 14px 16px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .header-title { font-size: 16px; }
+    .header-sub { font-size: 9px; }
+    .header-right { gap: 8px; }
+    .last-updated { display: none; }
+
+    /* Filter bar */
+    .filter-bar {
+      padding: 10px 16px;
+      gap: 8px;
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .filter-bar::-webkit-scrollbar { display: none; }
+    .filter-sep { display: none; }
+    .filter-label { white-space: nowrap; font-size: 9px; }
+    .filter-btn { font-size: 10px; padding: 5px 12px; white-space: nowrap; }
+    .filter-select { font-size: 10px; padding: 5px 10px; }
+
+    /* Main padding */
+    .main { padding: 16px; gap: 14px; }
+
+    /* KPI row: 2 columns on tablet */
+    .kpi-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .kpi-value { font-size: 22px; }
+    .kpi-label { font-size: 9px; }
+
+    /* Charts row overrides */
+    .charts-row-2,
+    .charts-row-3,
+    .charts-row-2b { grid-template-columns: 1fr; }
+
+    /* Chart card */
+    .chart-card { padding: 16px; }
+    .chart-title { font-size: 13px; }
+    .chart-subtitle { font-size: 9px; }
+    .chart-badge { font-size: 9px; padding: 2px 8px; }
+
+    /* Trend chart height */
+    .canvas-wrap[style*="height:260px"] { height: 220px !important; }
+    .canvas-wrap[style*="height:200px"] { height: 180px !important; }
+    .canvas-wrap[style*="height:220px"] { height: 190px !important; }
+    .canvas-wrap[style*="height:250px"] { height: 200px !important; }
+
+    /* Heatmap: scrollable */
+    #heatmapGrid {
+      font-size: 8px;
+      overflow-x: auto;
+      min-width: 500px;
+    }
+    .heatmap-scroll-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .hm-cell { height: 24px; font-size: 8px; }
+
+    /* Insights */
+    .insights-row { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .insight-card { padding: 14px; }
+    .insight-title { font-size: 11px; }
+    .insight-body { font-size: 10px; }
+    .insight-metric { font-size: 13px; }
+
+    /* Portfolio */
+    .portfolio-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .portfolio-section { padding: 16px; }
+    .portfolio-title { font-size: 15px; }
+
+    /* Destination table */
+    .dest-table { font-size: 11px; }
+    .dest-table th { font-size: 9px; padding: 8px 6px; }
+    .dest-table td { padding: 9px 6px; font-size: 11px; }
+    .dest-val { font-size: 11px; }
+    .dest-name { font-size: 11px; }
+    .dest-flag { font-size: 14px; }
+
+    /* Event chips */
+    .events-section { gap: 5px; }
+    .event-chip { font-size: 9px; padding: 3px 8px; }
+  }
+
+  /* --- PHONE (480px and below) --- */
+  @media (max-width: 480px) {
+    /* Header */
+    .header { padding: 12px 14px; }
+    .header-icon { width: 34px; height: 34px; font-size: 16px; }
+    .header-title { font-size: 13px; line-height: 1.3; }
+    .header-sub { font-size: 8px; letter-spacing: 0.1em; }
+    .live-badge { font-size: 9px; padding: 4px 9px; }
+    .live-dot { width: 5px; height: 5px; }
+
+    /* Filter bar */
+    .filter-bar { padding: 8px 14px; gap: 6px; }
+    .filter-btn { font-size: 9px; padding: 5px 10px; border-radius: 5px; }
+    .filter-select { font-size: 9px; padding: 5px 8px; }
+
+    /* Main */
+    .main { padding: 12px; gap: 12px; }
+
+    /* KPI: 1 column on small phones, 2 cols on most */
+    .kpi-row { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .kpi-card { padding: 12px 14px; border-radius: 10px; }
+    .kpi-label { font-size: 8px; letter-spacing: 0.12em; margin-bottom: 5px; }
+    .kpi-value { font-size: 20px; }
+    .kpi-change { font-size: 10px; padding: 1px 6px; }
+    .kpi-period { font-size: 9px; }
+    .kpi-sparkline { height: 26px; margin-top: 6px; }
+
+    /* Chart cards */
+    .chart-card { padding: 14px; border-radius: 10px; }
+    .chart-header { margin-bottom: 12px; flex-wrap: wrap; gap: 6px; }
+    .chart-title { font-size: 12px; }
+    .chart-subtitle { font-size: 9px; }
+    .chart-badge { font-size: 9px; padding: 2px 7px; }
+
+    /* Chart canvas heights */
+    .canvas-wrap { overflow: hidden; }
+
+    /* Trend chart */
+    #trendChart { max-height: 200px; }
+    #destPie { max-height: 160px; }
+    #yoyChart, #catChart, #cagrChart { max-height: 180px; }
+    #corrChart { max-height: 180px; }
+
+    /* Pie legend */
+    .chart-card > div[style*="display:flex"][style*="gap:8px"] {
+      gap: 5px !important;
+      font-size: 9px !important;
+    }
+
+    /* Heatmap scrollable wrapper */
+    .heatmap-scroll-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 8px; }
+    #heatmapGrid { min-width: 460px; font-size: 7px; gap: 2px; }
+    .hm-header { font-size: 7px; padding: 2px 1px; }
+    .hm-row-label { font-size: 8px; }
+    .hm-cell { height: 20px; font-size: 7px; border-radius: 3px; }
+
+    /* Heatmap legend */
+    .chart-card > div[style*="margin-top:12px"] > div > div { width: 14px !important; height: 8px !important; }
+
+    /* Insights: 1 column on phones */
+    .insights-row { grid-template-columns: 1fr; gap: 8px; }
+    .insight-card { padding: 12px 14px; border-radius: 8px; }
+    .insight-icon { font-size: 18px; margin-bottom: 6px; }
+    .insight-title { font-size: 12px; }
+    .insight-body { font-size: 10px; line-height: 1.6; }
+    .insight-metric { font-size: 14px; margin-top: 6px; }
+
+    /* Portfolio: 1 column on phones */
+    .portfolio-grid { grid-template-columns: 1fr; gap: 8px; }
+    .portfolio-section { padding: 14px; border-radius: 10px; }
+    .portfolio-title { font-size: 14px; }
+    .portfolio-sub { font-size: 9px; margin-bottom: 14px; }
+    .portfolio-step { padding: 12px; }
+    .step-title { font-size: 11px; }
+    .step-tool { font-size: 8px; }
+    .step-items li { font-size: 9px; }
+
+    /* Destination table: horizontal scroll */
+    .chart-card:has(#destTableBody) { overflow-x: auto; }
+    .dest-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .dest-table { min-width: 380px; }
+    .dest-table th { font-size: 8px; padding: 7px 5px; }
+    .dest-table td { padding: 8px 5px; font-size: 10px; }
+    .dest-name { font-size: 10px; }
+    .dest-val { font-size: 10px; }
+    .dest-growth { font-size: 10px; }
+    .dest-share { font-size: 10px; }
+    .dest-flag { font-size: 13px; margin-right: 4px; }
+    .dest-bar-wrap { height: 3px; margin-top: 4px; }
+
+    /* Event chips */
+    .events-section { gap: 4px; margin-top: 8px; }
+    .event-chip { font-size: 8px; padding: 3px 7px; }
+  }
+
+  /* --- Very small (360px and below) --- */
+  @media (max-width: 360px) {
+    .kpi-row { grid-template-columns: 1fr 1fr; gap: 6px; }
+    .kpi-value { font-size: 17px; }
+    .kpi-label { font-size: 7px; }
+    .header-title { font-size: 12px; }
+    .chart-title { font-size: 11px; }
+    #heatmapGrid { min-width: 400px; }
+    .insights-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <div class="header-icon">🧵</div>
+    <div>
+      <div class="header-title">Tiruppur Textile Export Analytics</div>
+      <div class="header-sub">Knitwear Industry · 2014–2024 · Power BI Portfolio Dashboard</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="last-updated">Data: Ministry of Textiles · DGCI&S · RBI</div>
+    <div class="live-badge"><div class="live-dot"></div>LIVE SIM</div>
+  </div>
+</div>
+
+<!-- FILTER BAR -->
+<div class="filter-bar">
+  <span class="filter-label">Period:</span>
+  <button class="filter-btn" data-group="range" onclick="setRange('5y',this)">5 Year</button>
+  <button class="filter-btn active" data-group="range" onclick="setRange('10y',this)">10 Year</button>
+  <button class="filter-btn" data-group="range" onclick="setRange('all',this)">All</button>
+  <div class="filter-sep"></div>
+  <span class="filter-label">Category:</span>
+  <button class="filter-btn active" data-group="cat" id="catAll" onclick="setCat('all',this)">All Knitwear</button>
+  <button class="filter-btn" data-group="cat" id="catCotton" onclick="setCat('cotton',this)">Cotton</button>
+  <button class="filter-btn" data-group="cat" id="catSynthetic" onclick="setCat('synthetic',this)">Synthetic</button>
+  <button class="filter-btn" data-group="cat" id="catBlend" onclick="setCat('blend',this)">Blends</button>
+  <div class="filter-sep"></div>
+  <span class="filter-label">Market:</span>
+  <select class="filter-select" id="marketFilter" onchange="filterMarket(this.value)">
+    <option value="all">All Destinations</option>
+    <option value="eu">European Union</option>
+    <option value="us">United States</option>
+    <option value="uk">United Kingdom</option>
+    <option value="me">Middle East</option>
+    <option value="other">Others</option>
+  </select>
+</div>
+
+<div id="tooltip"></div>
+
+<div class="main">
+
+  <!-- KPI CARDS -->
+  <div class="kpi-row">
+    <div class="kpi-card" style="--accent-color: var(--gold)">
+      <div class="kpi-label">Total Exports FY2024</div>
+      <div class="kpi-value" id="kpi1">₹38,420Cr</div>
+      <div class="kpi-sub">
+        <span class="kpi-change up" id="kpi1c">▲ 11.2%</span>
+        <span class="kpi-period">vs FY2023</span>
+      </div>
+      <canvas class="kpi-sparkline" id="spark1"></canvas>
+    </div>
+    <div class="kpi-card" style="--accent-color: var(--teal)">
+      <div class="kpi-label">Knitwear Export Share</div>
+      <div class="kpi-value" id="kpi2">89.4%</div>
+      <div class="kpi-sub">
+        <span class="kpi-change up">▲ 1.8pp</span>
+        <span class="kpi-period">of India total</span>
+      </div>
+      <canvas class="kpi-sparkline" id="spark2"></canvas>
+    </div>
+    <div class="kpi-card" style="--accent-color: var(--blue)">
+      <div class="kpi-label">Top Market (EU Share)</div>
+      <div class="kpi-value" id="kpi3">58.2%</div>
+      <div class="kpi-sub">
+        <span class="kpi-change down" id="kpi3c">▼ 2.1pp</span>
+        <span class="kpi-period">concentration risk</span>
+      </div>
+      <canvas class="kpi-sparkline" id="spark3"></canvas>
+    </div>
+    <div class="kpi-card" style="--accent-color: var(--green)">
+      <div class="kpi-label">10-Year CAGR</div>
+      <div class="kpi-value">8.4%</div>
+      <div class="kpi-sub">
+        <span class="kpi-change up">▲ GROWING</span>
+        <span class="kpi-period">2014–2024</span>
+      </div>
+      <canvas class="kpi-sparkline" id="spark4"></canvas>
+    </div>
+    <div class="kpi-card" style="--accent-color: var(--orange)">
+      <div class="kpi-label">Units / Active Exporters</div>
+      <div class="kpi-value">1,847</div>
+      <div class="kpi-sub">
+        <span class="kpi-change up">▲ 234</span>
+        <span class="kpi-period">new registrations</span>
+      </div>
+      <canvas class="kpi-sparkline" id="spark5"></canvas>
+    </div>
+  </div>
+
+  <!-- ROW 1: Main Trend + Destination Pie -->
+  <div class="charts-row charts-row-2">
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Annual Export Value Trend (₹ Crore)</div>
+          <div class="chart-subtitle">FY2014–FY2024 · with macro event markers</div>
+          <div class="events-section">
+            <span class="event-chip gst" onclick="toggleEvent('gst',this)">🔶 GST Impact (2017)</span>
+            <span class="event-chip covid" onclick="toggleEvent('covid',this)">🦠 COVID Shock (2020)</span>
+            <span class="event-chip china1" onclick="toggleEvent('china1',this)">🔄 China+1 (2022)</span>
+            <span class="event-chip rec" onclick="toggleEvent('rec',this)">📉 EU Recession (2023)</span>
+          </div>
+        </div>
+        <div class="chart-badge">10Y TREND</div>
+      </div>
+      <div class="canvas-wrap" style="height:260px">
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Export Destination Mix</div>
+          <div class="chart-subtitle">FY2024 · by revenue share %</div>
+        </div>
+        <div class="chart-badge">MARKET SHARE</div>
+      </div>
+      <div class="canvas-wrap" style="height:200px">
+        <canvas id="destPie"></canvas>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+        <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3)"><span style="width:10px;height:10px;border-radius:2px;background:#4ECDC4;display:inline-block"></span>EU 58.2%</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3)"><span style="width:10px;height:10px;border-radius:2px;background:#5B9BD5;display:inline-block"></span>USA 18.4%</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3)"><span style="width:10px;height:10px;border-radius:2px;background:#C9A84C;display:inline-block"></span>UK 9.1%</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3)"><span style="width:10px;height:10px;border-radius:2px;background:#F4A261;display:inline-block"></span>ME 7.3%</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3)"><span style="width:10px;height:10px;border-radius:2px;background:#A78BFA;display:inline-block"></span>Others 7%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 2: Seasonal Heatmap -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Seasonal Export Heatmap — Monthly Volume Index</div>
+        <div class="chart-subtitle">Oct–Feb is peak season · hover cells for values</div>
+      </div>
+      <div class="chart-badge">SEASONALITY MATRIX</div>
+    </div>
+    <div class="heatmap-scroll-wrap"><div id="heatmapGrid" class="heatmap-grid"></div></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+      <span style="font-size:10px;color:var(--text3)">Low</span>
+      <div style="display:flex;gap:3px">
+        <div style="width:20px;height:10px;border-radius:2px;background:#0d1a12"></div>
+        <div style="width:20px;height:10px;border-radius:2px;background:#1a3a24"></div>
+        <div style="width:20px;height:10px;border-radius:2px;background:#2a6a3e"></div>
+        <div style="width:20px;height:10px;border-radius:2px;background:#3d9959"></div>
+        <div style="width:20px;height:10px;border-radius:2px;background:#4caf7d"></div>
+        <div style="width:20px;height:10px;border-radius:2px;background:#80cc9d"></div>
+        <div style="width:20px;height:10px;border-radius:2px;background:#b3e0c3"></div>
+      </div>
+      <span style="font-size:10px;color:var(--text3)">High</span>
+    </div>
+  </div>
+
+  <!-- ROW 3: Bar YoY + Line Category Trend + Destination Table -->
+  <div class="charts-row charts-row-3">
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">YoY Growth Rate</div>
+          <div class="chart-subtitle">Annual % change</div>
+        </div>
+        <div class="chart-badge">YoY %</div>
+      </div>
+      <div class="canvas-wrap" style="height:220px">
+        <canvas id="yoyChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Category Trend</div>
+          <div class="chart-subtitle">Cotton vs Synthetic vs Blends</div>
+        </div>
+        <div class="chart-badge">PRODUCT MIX</div>
+      </div>
+      <div class="canvas-wrap" style="height:220px">
+        <canvas id="catChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Top Markets by CAGR</div>
+          <div class="chart-subtitle">5-Year growth ranking</div>
+        </div>
+        <div class="chart-badge">DEST RANK</div>
+      </div>
+      <div class="canvas-wrap" style="height:220px">
+        <canvas id="cagrChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 4: Destination detail table + INR/USD Correlation -->
+  <div class="charts-row charts-row-2b">
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Destination Performance Matrix</div>
+          <div class="chart-subtitle">FY2024 · Value, growth & dependency index</div>
+        </div>
+      </div>
+      <div class="dest-table-wrap"><table class="dest-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>DESTINATION</th>
+            <th>FY24 VALUE</th>
+            <th>YoY</th>
+            <th>SHARE</th>
+          </tr>
+        </thead>
+        <tbody id="destTableBody"></tbody>
+      </table></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">INR/USD Rate vs Export Value</div>
+          <div class="chart-subtitle">Currency impact on export competitiveness</div>
+        </div>
+        <div class="chart-badge">CORRELATION</div>
+      </div>
+      <div class="canvas-wrap" style="height:250px">
+        <canvas id="corrChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- KEY INSIGHTS -->
+  <div class="insights-row">
+    <div class="insight-card" style="--ins-color: var(--gold)">
+      <div class="insight-icon">🎯</div>
+      <div class="insight-title">EU Over-Dependence Risk</div>
+      <div class="insight-body">58.2% of exports concentrated in EU. Post-Brexit & EU recession signals create vulnerability. Diversification to US (growing) and ASEAN needed.</div>
+      <div class="insight-metric">Risk Score: HIGH</div>
+    </div>
+    <div class="insight-card" style="--ins-color: var(--green)">
+      <div class="insight-icon">📈</div>
+      <div class="insight-title">China+1 Opportunity</div>
+      <div class="insight-body">US share grew from 12.1% (2021) to 18.4% (2024) — a 52% jump driven by China+1 sourcing shift. Bangladesh & Vietnam are key competitors.</div>
+      <div class="insight-metric">US CAGR: +14.2%</div>
+    </div>
+    <div class="insight-card" style="--ins-color: var(--teal)">
+      <div class="insight-icon">📅</div>
+      <div class="insight-title">Peak Season: Oct–Feb</div>
+      <div class="insight-body">Oct–Feb accounts for 62% of annual export volume. Inventory & raw material procurement should begin 3 months prior in Jul–Sep.</div>
+      <div class="insight-metric">62% Revenue in 5 months</div>
+    </div>
+    <div class="insight-card" style="--ins-color: var(--red)">
+      <div class="insight-icon">📉</div>
+      <div class="insight-title">GST Disruption Recovery</div>
+      <div class="insight-body">GST implementation (Jul 2017) caused an 18-month recovery period. Input tax credit delays disrupted SME cash flows across the supply chain.</div>
+      <div class="insight-metric">18-month recovery lag</div>
+    </div>
+    <div class="insight-card" style="--ins-color: var(--blue)">
+      <div class="insight-icon">💱</div>
+      <div class="insight-title">Currency Competitiveness</div>
+      <div class="insight-body">Correlation of INR depreciation vs export value = +0.72. Weaker INR boosts competitiveness. FY24 avg rate of ₹83.2/$ is favorable.</div>
+      <div class="insight-metric">Correlation: r = +0.72</div>
+    </div>
+    <div class="insight-card" style="--ins-color: var(--orange)">
+      <div class="insight-icon">🏭</div>
+      <div class="insight-title">COVID Recovery Milestone</div>
+      <div class="insight-body">FY2020 saw a 31% crash. Full recovery to pre-COVID levels achieved in FY2022 — 2 years. FY2024 exports are 58% above FY2019 levels.</div>
+      <div class="insight-metric">+58% vs Pre-COVID</div>
+    </div>
+  </div>
+
+  <!-- PORTFOLIO METHODOLOGY SECTION -->
+  <div class="portfolio-section">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div style="width:36px;height:36px;background:linear-gradient(135deg,var(--gold-dim),var(--gold));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px">📊</div>
+      <div>
+        <div class="portfolio-title">Portfolio Project Methodology</div>
+        <div class="portfolio-sub">Data Sources: Ministry of Textiles texmin.nic.in · DGCI&S dgciskol.gov.in · RBI DBIE · UN Comtrade</div>
+      </div>
+    </div>
+    <div class="portfolio-grid">
+      <div class="portfolio-step">
+        <div class="step-num">1</div>
+        <div class="step-title">Data Extraction & Cleaning</div>
+        <div class="step-tools">
+          <span class="step-tool">Python</span>
+          <span class="step-tool">Pandas</span>
+          <span class="step-tool">requests</span>
+        </div>
+        <ul class="step-items">
+          <li>Scrape DGCI&S monthly export PDFs → CSV</li>
+          <li>Standardize HS codes for knitwear (HS 61xx)</li>
+          <li>Impute COVID gaps with interpolation</li>
+          <li>Merge RBI forex rate data by month</li>
+          <li>Currency normalize to USD for global comparison</li>
+        </ul>
+      </div>
+      <div class="portfolio-step">
+        <div class="step-num">2</div>
+        <div class="step-title">SQL Analysis Layer</div>
+        <div class="step-tools">
+          <span class="step-tool">PostgreSQL</span>
+          <span class="step-tool">CTEs</span>
+          <span class="step-tool">Window Fn</span>
+        </div>
+        <ul class="step-items">
+          <li>Rank destinations by 5Y CAGR (RANK() OVER)</li>
+          <li>Pivot: month × year export matrix</li>
+          <li>YoY growth with LAG() function</li>
+          <li>Flag quarters below pre-GST baseline</li>
+          <li>Category-wise revenue share by year</li>
+        </ul>
+      </div>
+      <div class="portfolio-step">
+        <div class="step-num">3</div>
+        <div class="step-title">Python EDA & Modeling</div>
+        <div class="step-tools">
+          <span class="step-tool">Seaborn</span>
+          <span class="step-tool">statsmodels</span>
+          <span class="step-tool">scipy</span>
+        </div>
+        <ul class="step-items">
+          <li>Seasonality heatmap (pivot_table + seaborn)</li>
+          <li>Pearson correlation: INR/USD vs exports</li>
+          <li>OLS regression: GDP growth → export volume</li>
+          <li>Time-series decomposition (seasonal_decompose)</li>
+          <li>Anomaly detection on COVID dip period</li>
+        </ul>
+      </div>
+      <div class="portfolio-step">
+        <div class="step-num">4</div>
+        <div class="step-title">Power BI Dashboard</div>
+        <div class="step-tools">
+          <span class="step-tool">Power BI</span>
+          <span class="step-tool">DAX</span>
+          <span class="step-tool">Power Query</span>
+        </div>
+        <ul class="step-items">
+          <li>KPI cards with YoY DAX measures</li>
+          <li>Filled map: destination revenue by country</li>
+          <li>Matrix visual: seasonality heatmap</li>
+          <li>Event annotation line chart</li>
+          <li>Drill-through: country → monthly breakdown</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ==================== MOBILE CHART DEFAULTS ====================
+(function() {
+  function isMobile() { return window.innerWidth <= 480; }
+  function isTablet() { return window.innerWidth <= 768; }
+  if (typeof Chart !== 'undefined') {
+    Chart.defaults.font.size = isMobile() ? 8 : isTablet() ? 9 : 10;
+    Chart.defaults.plugins.legend.labels.font = { size: isMobile() ? 8 : isTablet() ? 9 : 10 };
+  }
+})();
+// ==================== DATA ====================
+const years = ['FY14','FY15','FY16','FY17','FY18','FY19','FY20','FY21','FY22','FY23','FY24'];
+const exportValues = [17200, 18800, 20100, 18900, 21400, 24300, 16800, 19600, 27800, 34560, 38420];
+const yoyGrowth = [null, 9.3, 6.9, -5.9, 13.2, 13.6, -30.9, 16.7, 41.8, 24.3, 11.2];
+const euShare = [62,61.5,61,62,60.5,59,61,62,59.5,60.3,58.2];
+const usShare = [11,11.5,12,11.8,12.5,13,12,11,14,16.2,18.4];
+const ukShare = [8,8.2,8.5,8.3,8.8,9.2,9,8.5,9.5,9.1,9.1];
+const meShare = [9,9,8.5,8.5,8.5,8.3,8,8.5,7,7,7.3];
+
+const cottonData = [10500,11400,12200,11200,12800,14500,9800,11500,16500,20200,22100];
+const syntheticData = [4200,4600,4900,4700,5200,5800,4100,4800,6500,8200,9400];
+const blendData = [2500,2800,3000,3000,3400,4000,2900,3300,4800,6160,6920];
+
+const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const heatYears = ['2019','2020','2021','2022','2023','2024'];
+const heatData = {
+  '2019':[72,68,71,65,60,55,58,70,82,95,98,88],
+  '2020':[74,55,28,18,22,38,45,52,58,62,65,60],
+  '2021':[55,58,62,60,65,70,72,78,85,92,96,90],
+  '2022':[82,80,78,75,72,70,75,85,92,100,102,96],
+  '2023':[88,84,80,78,75,72,76,88,94,100,98,92],
+  '2024':[90,87,84,80,78,75,80,92,96,100,100,94]
+};
+
+const destinations = [
+  { flag:'🇪🇺', name:'European Union', value:'₹22,350Cr', growth:'+8.4%', share:58.2, up:true },
+  { flag:'🇺🇸', name:'United States', value:'₹7,069Cr', growth:'+18.2%', share:18.4, up:true },
+  { flag:'🇬🇧', name:'United Kingdom', value:'₹3,496Cr', growth:'+6.1%', share:9.1, up:true },
+  { flag:'🇦🇪', name:'Middle East', value:'₹2,805Cr', growth:'+4.8%', share:7.3, up:true },
+  { flag:'🌏', name:'Others', value:'₹2,690Cr', growth:'+12.3%', share:7.0, up:true },
+];
+
+const cagrData = {
+  labels:['USA','Others','Middle East','UK','EU'],
+  values:[14.2, 11.8, 8.3, 7.9, 6.1]
+};
+
+const inrUsd = [60.2,62.4,65.5,64.5,64.5,69.9,70.9,74.1,75.7,81.9,83.2];
+
+// ==================== CHARTS ====================
+Chart.defaults.color = '#6B6760';
+Chart.defaults.borderColor = '#2A2D32';
+Chart.defaults.font.family = "'DM Mono', monospace";
+Chart.defaults.font.size = 10;
+
+// SPARKLINES
+function sparkline(id, data, color) {
+  const ctx = document.getElementById(id).getContext('2d');
+  new Chart(ctx, {
+    type:'line',
+    data:{ labels:data.map((_,i)=>i), datasets:[{data, borderColor:color, borderWidth:1.5, fill:true,
+      backgroundColor: color+'22', pointRadius:0, tension:0.4}]},
+    options:{ plugins:{legend:{display:false},tooltip:{enabled:false}},
+      scales:{x:{display:false},y:{display:false}}, animation:{duration:1000} }
+  });
+}
+sparkline('spark1', exportValues, '#C9A84C');
+sparkline('spark2', [86,87,87.5,88,88.2,88.5,88,88.8,89,89.2,89.4], '#4ECDC4');
+sparkline('spark3', euShare, '#5B9BD5');
+sparkline('spark4', exportValues.map((v,i)=>i===0?0:((v/exportValues[i-1]-1)*100)), '#4CAF7D');
+sparkline('spark5', [1200,1280,1350,1380,1410,1450,1380,1490,1560,1640,1847], '#F4A261');
+
+// TREND CHART
+let trendChart, showEvents = {gst:true, covid:true, china1:true, rec:true};
+
+function buildTrend() {
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  if(trendChart) trendChart.destroy();
+
+  const annotations = [];
+  if(showEvents.gst) annotations.push({ type:'line', xMin:3, xMax:3, borderColor:'#C9A84C88', borderWidth:2, borderDash:[4,4],
+    label:{content:'GST 2017',enabled:true,color:'#C9A84C',backgroundColor:'#C9A84C22',font:{size:9}} });
+  if(showEvents.covid) annotations.push({ type:'line', xMin:6, xMax:6, borderColor:'#E05A5A88', borderWidth:2, borderDash:[4,4],
+    label:{content:'COVID 2020',enabled:true,color:'#E05A5A',backgroundColor:'#E05A5A22',font:{size:9}} });
+  if(showEvents.china1) annotations.push({ type:'line', xMin:8, xMax:8, borderColor:'#4ECDC488', borderWidth:2, borderDash:[4,4],
+    label:{content:'China+1',enabled:true,color:'#4ECDC4',backgroundColor:'#4ECDC422',font:{size:9}} });
+  if(showEvents.rec) annotations.push({ type:'line', xMin:9, xMax:9, borderColor:'#5B9BD588', borderWidth:2, borderDash:[4,4],
+    label:{content:'EU Recession',enabled:true,color:'#5B9BD5',backgroundColor:'#5B9BD522',font:{size:9}} });
+
+  trendChart = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels: years,
+      datasets:[{
+        label:'Export Value (₹ Cr)',
+        data: exportValues,
+        borderColor:'#C9A84C',
+        backgroundColor: (ctx2) => {
+          const g = ctx2.chart.ctx.createLinearGradient(0,0,0,260);
+          g.addColorStop(0,'#C9A84C40'); g.addColorStop(1,'#C9A84C00');
+          return g;
+        },
+        fill:true, tension:0.4, borderWidth:2.5, pointRadius:5,
+        pointBackgroundColor:'#C9A84C', pointBorderColor:'#0B0C0E', pointBorderWidth:2,
+        pointHoverRadius:8
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'#1E2124', borderColor:'#353940', borderWidth:1,
+          titleColor:'#E8E4DC', bodyColor:'#A8A49C',
+          callbacks:{label: ctx3=>`  ₹${ctx3.raw.toLocaleString()} Cr`}
+        }
+      },
+      scales:{
+        x:{grid:{color:'#1a1c1e'}, ticks:{color:'#6B6760'}},
+        y:{
+          grid:{color:'#1a1c1e'},
+          ticks:{color:'#6B6760', callback:v=>'₹'+v.toLocaleString()},
+          min:10000, max:45000
+        }
+      }
+    }
+  });
+}
+buildTrend();
+
+// DEST PIE
+const pieCtx = document.getElementById('destPie').getContext('2d');
+new Chart(pieCtx, {
+  type:'doughnut',
+  data:{
+    labels:['EU','USA','UK','Middle East','Others'],
+    datasets:[{
+      data:[58.2,18.4,9.1,7.3,7.0],
+      backgroundColor:['#4ECDC4','#5B9BD5','#C9A84C','#F4A261','#A78BFA'],
+      borderColor:'#111315', borderWidth:3, hoverOffset:8
+    }]
+  },
+  options:{
+    responsive:true, maintainAspectRatio:false, cutout:'72%',
+    plugins:{
+      legend:{display:false},
+      tooltip:{
+        backgroundColor:'#1E2124', borderColor:'#353940', borderWidth:1,
+        titleColor:'#E8E4DC', bodyColor:'#A8A49C',
+      }
+    }
+  }
+});
+
+// YOY CHART
+const yoyCtx = document.getElementById('yoyChart').getContext('2d');
+new Chart(yoyCtx, {
+  type:'bar',
+  data:{
+    labels: years.slice(1),
+    datasets:[{
+      label:'YoY Growth %',
+      data: yoyGrowth.slice(1),
+      backgroundColor: yoyGrowth.slice(1).map(v => v >= 0 ? '#4CAF7D99' : '#E05A5A99'),
+      borderColor: yoyGrowth.slice(1).map(v => v >= 0 ? '#4CAF7D' : '#E05A5A'),
+      borderWidth:1, borderRadius:4,
+    }]
+  },
+  options:{
+    responsive:true, maintainAspectRatio:false,
+    plugins:{legend:{display:false}, tooltip:{
+      backgroundColor:'#1E2124', borderColor:'#353940', borderWidth:1,
+      callbacks:{label:c=>`  ${c.raw.toFixed(1)}%`}
+    }},
+    scales:{
+      x:{grid:{display:false}, ticks:{color:'#6B6760', font:{size:9}}},
+      y:{grid:{color:'#1a1c1e'}, ticks:{color:'#6B6760', callback:v=>v+'%'},
+        afterDataLimits: axis => { axis.min = Math.min(-35, axis.min); axis.max = Math.max(45, axis.max); }}
+    }
+  }
+});
+
+// CATEGORY CHART — stored as variable for filter interactions
+const catChartCanvas = document.getElementById('catChart');
+const catChartInst = new Chart(catChartCanvas, {
+  type:'line',
+  data:{
+    labels: years,
+    datasets:[
+      { label:'Cotton', data:cottonData, borderColor:'#4ECDC4', backgroundColor:'#4ECDC418', fill:true, tension:0.4, borderWidth:2.5, pointRadius:3 },
+      { label:'Synthetic', data:syntheticData, borderColor:'#F4A261', backgroundColor:'#F4A26118', fill:true, tension:0.4, borderWidth:2.5, pointRadius:3 },
+      { label:'Blends', data:blendData, borderColor:'#A78BFA', backgroundColor:'#A78BFA18', fill:true, tension:0.4, borderWidth:2.5, pointRadius:3 }
+    ]
+  },
+  options:{
+    responsive:true, maintainAspectRatio:false,
+    plugins:{legend:{position:'bottom', labels:{color:'#bbb', boxWidth:12, padding:10, font:{size:10}}},
+      tooltip:{backgroundColor:'#1E2124', borderColor:'#353940', borderWidth:1,
+        callbacks:{label:c=>`  ₹${c.raw.toLocaleString()} Cr`}}},
+    scales:{
+      x:{grid:{color:'#1e2022'}, ticks:{color:'#777', font:{size:9}}},
+      y:{grid:{color:'#1e2022'}, ticks:{color:'#777', callback:v=>'₹'+(v/1000).toFixed(0)+'k'}}
+    }
+  }
+});
+
+// CAGR CHART
+const cagrCtx = document.getElementById('cagrChart').getContext('2d');
+new Chart(cagrCtx, {
+  type:'bar',
+  data:{
+    labels: cagrData.labels,
+    datasets:[{
+      label:'5Y CAGR %',
+      data: cagrData.values,
+      backgroundColor:['#5B9BD5CC','#A78BFACC','#F4A261CC','#4ECDC4CC','#4CAF7DCC'],
+      borderColor:['#5B9BD5','#A78BFA','#F4A261','#4ECDC4','#4CAF7D'],
+      borderWidth:1, borderRadius:6,
+      indexAxis:'y'
+    }]
+  },
+  options:{
+    responsive:true, maintainAspectRatio:false, indexAxis:'y',
+    plugins:{legend:{display:false}, tooltip:{backgroundColor:'#1E2124', borderColor:'#353940', borderWidth:1,
+      callbacks:{label:c=>`  CAGR: ${c.raw}%`}}},
+    scales:{
+      x:{grid:{color:'#1a1c1e'}, ticks:{color:'#6B6760', callback:v=>v+'%'}},
+      y:{grid:{display:false}, ticks:{color:'#A8A49C', font:{size:10}}}
+    }
+  }
+});
+
+// CORRELATION CHART
+const corrCtx = document.getElementById('corrChart').getContext('2d');
+new Chart(corrCtx, {
+  type:'line',
+  data:{
+    labels: years,
+    datasets:[
+      { label:'Export Value (₹ Cr)', data:exportValues, borderColor:'#C9A84C', yAxisID:'y',
+        tension:0.4, borderWidth:2, pointRadius:3, fill:false },
+      { label:'INR/USD Rate', data:inrUsd, borderColor:'#5B9BD5', yAxisID:'y2',
+        tension:0.4, borderWidth:2, pointRadius:3, borderDash:[5,3], fill:false }
+    ]
+  },
+  options:{
+    responsive:true, maintainAspectRatio:false,
+    interaction:{mode:'index',intersect:false},
+    plugins:{
+      legend:{position:'bottom', labels:{color:'#A8A49C', boxWidth:10, padding:8, font:{size:9}}},
+      tooltip:{backgroundColor:'#1E2124', borderColor:'#353940', borderWidth:1,
+        callbacks:{label:c=> c.datasetIndex===0 ? `  ₹${c.raw.toLocaleString()} Cr` : `  ₹${c.raw}/USD`}}
+    },
+    scales:{
+      x:{grid:{color:'#1a1c1e'}, ticks:{color:'#6B6760', font:{size:9}}},
+      y:{grid:{color:'#1a1c1e'}, position:'left', ticks:{color:'#C9A84C', callback:v=>'₹'+(v/1000).toFixed(0)+'k'}},
+      y2:{grid:{display:false}, position:'right', ticks:{color:'#5B9BD5', callback:v=>'₹'+v}}
+    }
+  }
+});
+
+// ==================== RESPONSIVE CANVAS HEIGHTS ====================
+(function() {
+  function applyMobileHeights() {
+    const mobile = window.innerWidth <= 480;
+    const tablet = window.innerWidth <= 768;
+    const heights = {
+      trendChart: mobile ? 200 : tablet ? 220 : 260,
+      destPie: mobile ? 160 : tablet ? 180 : 200,
+      yoyChart: mobile ? 180 : tablet ? 190 : 220,
+      catChart: mobile ? 180 : tablet ? 190 : 220,
+      cagrChart: mobile ? 180 : tablet ? 190 : 220,
+      corrChart: mobile ? 180 : tablet ? 200 : 250,
+    };
+    Object.entries(heights).forEach(([id, h]) => {
+      const el = document.getElementById(id);
+      if (el && el.parentElement) el.parentElement.style.height = h + 'px';
+    });
+  }
+  applyMobileHeights();
+  window.addEventListener('resize', applyMobileHeights);
+})();
+
+// ==================== HEATMAP ====================
+function buildHeatmap() {
+  const grid = document.getElementById('heatmapGrid');
+  grid.innerHTML = '';
+  // header row
+  grid.appendChild(Object.assign(document.createElement('div'), {className:'hm-header'}));
+  months.forEach(m => {
+    const d = document.createElement('div');
+    d.className = 'hm-header';
+    d.textContent = m.substring(0,3);
+    grid.appendChild(d);
+  });
+  heatYears.forEach(yr => {
+    const label = document.createElement('div');
+    label.className = 'hm-row-label';
+    label.textContent = yr;
+    grid.appendChild(label);
+    heatData[yr].forEach((val, mi) => {
+      const cell = document.createElement('div');
+      cell.className = 'hm-cell';
+      const intensity = val / 105;
+      const colors = [
+        [13, 26, 18], [26, 58, 36], [42, 106, 62], [61, 153, 89], [76, 175, 125], [128, 204, 157], [179, 224, 195]
+      ];
+      const idx = Math.min(Math.floor(intensity * colors.length), colors.length - 1);
+      const [r,g,b] = colors[idx];
+      cell.style.background = `rgb(${r},${g},${b})`;
+      cell.style.color = intensity > 0.5 ? '#001208' : '#4CAF7D88';
+      cell.innerHTML = `${val}<div class="hm-tooltip">${yr} ${months[mi]}: Index ${val}</div>`;
+      grid.appendChild(cell);
+    });
+  });
+}
+buildHeatmap();
+
+// ==================== DEST TABLE ====================
+const allDestinations = [
+  { flag:'🇪🇺', name:'European Union', value:'₹22,350Cr', growth:'+8.4%', share:58.2, up:true, key:'eu' },
+  { flag:'🇺🇸', name:'United States', value:'₹7,069Cr', growth:'+18.2%', share:18.4, up:true, key:'us' },
+  { flag:'🇬🇧', name:'United Kingdom', value:'₹3,496Cr', growth:'+6.1%', share:9.1, up:true, key:'uk' },
+  { flag:'🇦🇪', name:'Middle East', value:'₹2,805Cr', growth:'+4.8%', share:7.3, up:true, key:'me' },
+  { flag:'🌏', name:'Others', value:'₹2,690Cr', growth:'+12.3%', share:7.0, up:true, key:'other' },
+];
+
+function renderDestTable(filter) {
+  const tbody = document.getElementById('destTableBody');
+  tbody.innerHTML = '';
+  const rows = filter === 'all' ? allDestinations : allDestinations.filter(d => d.key === filter);
+  if(rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:#666;font-size:12px">No data for selected filter</td></tr>`;
+    return;
+  }
+  rows.forEach((d, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="dest-rank">#${i+1}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="dest-flag">${d.flag}</span>
+          <div>
+            <div class="dest-name">${d.name}</div>
+            <div class="dest-bar-wrap"><div class="dest-bar" style="width:${d.share}%"></div></div>
+          </div>
+        </div>
+      </td>
+      <td class="dest-val">${d.value}</td>
+      <td class="dest-growth" style="color:${d.up?'#4CAF7D':'#E05A5A'}">${d.growth}</td>
+      <td class="dest-share">${d.share}%</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+renderDestTable('all');
+
+// ==================== INTERACTIVITY ====================
+
+// Stored reference to catChart for filter interactions
+const catChartRef = catChartInst;
+
+function setActiveByGroup(group, activeBtn) {
+  document.querySelectorAll(`[data-group="${group}"]`).forEach(b => b.classList.remove('active'));
+  activeBtn.classList.add('active');
+}
+
+function setRange(range, btn) {
+  setActiveByGroup('range', btn);
+  let sliceStart = 0;
+  if(range === '5y') sliceStart = 6;
+  else if(range === '10y') sliceStart = 1;
+
+  const labels = years.slice(sliceStart);
+  const data = exportValues.slice(sliceStart);
+  if(trendChart) {
+    trendChart.data.labels = labels;
+    trendChart.data.datasets[0].data = data;
+    trendChart.update('active');
+  }
+  // Also update KPI 1 based on range
+  const endVal = exportValues[exportValues.length-1];
+  const startVal = exportValues[sliceStart];
+  const totalCagr = (((endVal/startVal) ** (1/(exportValues.length-1-sliceStart))) - 1) * 100;
+  document.getElementById('kpi1').textContent = '₹' + (endVal/100).toFixed(0) + 'Cr';
+}
+
+function setCat(cat, btn) {
+  setActiveByGroup('cat', btn);
+
+  // Update category chart visibility using stored reference
+  if(catChartRef) {
+    catChartRef.data.datasets.forEach((ds, i) => {
+      const show = cat === 'all' || (cat === 'cotton' && i===0) || (cat === 'synthetic' && i===1) || (cat === 'blend' && i===2);
+      catChartRef.setDatasetVisibility(i, show);
+    });
+    catChartRef.update('active');
+  }
+
+  // Map category to data arrays
+  const catMap = {
+    all: exportValues,
+    cotton: cottonData,
+    synthetic: syntheticData,
+    blend: blendData
+  };
+
+  // Update trend chart
+  if(trendChart) {
+    trendChart.data.datasets[0].data = catMap[cat] || exportValues;
+    trendChart.data.datasets[0].label = cat === 'all' ? 'Export Value (₹ Cr)' :
+      cat.charAt(0).toUpperCase() + cat.slice(1) + ' Exports (₹ Cr)';
+    trendChart.update('active');
+  }
+
+  const vals = catMap[cat] || exportValues;
+  const last = vals[vals.length - 1];
+  const prev = vals[vals.length - 2];
+  const pct = ((last - prev) / prev * 100).toFixed(1);
+
+  // KPI 1 — Total Exports value & change
+  const kpi1el = document.getElementById('kpi1');
+  if(kpi1el) kpi1el.textContent = '₹' + last.toLocaleString() + 'Cr';
+  const kpi1c = document.getElementById('kpi1c');
+  if(kpi1c) {
+    kpi1c.textContent = (pct > 0 ? '▲ ' : '▼ ') + Math.abs(pct) + '%';
+    kpi1c.className = 'kpi-change ' + (pct > 0 ? 'up' : 'down');
+  }
+
+  // KPI 2 — Knitwear share (cotton ~57%, synthetic ~24%, blend ~18% of total)
+  const shareMap = { all: '89.4%', cotton: '57.6%', synthetic: '24.5%', blend: '18.0%' };
+  const kpi2el = document.getElementById('kpi2');
+  if(kpi2el) kpi2el.textContent = shareMap[cat] || '89.4%';
+
+  // KPI 4 — 10Y CAGR recalculated for selected category
+  const firstVal = vals[0];
+  const cagr = (((last / firstVal) ** (1 / (vals.length - 1))) - 1) * 100;
+  const kpi4els = document.querySelectorAll('.kpi-card:nth-child(4) .kpi-value');
+  kpi4els.forEach(el => el.textContent = cagr.toFixed(1) + '%');
+}
+
+function filterMarket(val) {
+  renderDestTable(val);
+  // Highlight on pie chart if possible
+  const pie = Chart.getChart('destPie');
+  if(pie) {
+    const keyMap = { all:-1, eu:0, us:1, uk:2, me:3, other:4 };
+    const idx = keyMap[val];
+    if(idx >= 0) {
+      pie.setActiveElements([{datasetIndex:0, index:idx}]);
+      pie.tooltip.setActiveElements([{datasetIndex:0, index:idx}]);
+    } else {
+      pie.setActiveElements([]);
+      pie.tooltip.setActiveElements([]);
+    }
+    pie.update();
+  }
+}
+
+function toggleEvent(ev, chip) {
+  showEvents[ev] = !showEvents[ev];
+  chip.style.opacity = showEvents[ev] ? '1' : '0.35';
+  chip.style.textDecoration = showEvents[ev] ? 'none' : 'line-through';
+  buildTrend();
+}
+</script>
+</body>
+</html>
